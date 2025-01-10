@@ -191,7 +191,8 @@ const epub2json = async (o: Options) => {
 
   // parse html
   console.log(`Parsing HTML...`);
-  const nodes = [];
+  const metas = [];
+  const pages = [];
   for (const itemRef of opf.package[0].spine[0].itemref) {
     const linear = !itemRef["@_linear"] || itemRef["@_linear"][0] == "yes";
     if (!linear) continue;
@@ -214,15 +215,28 @@ const epub2json = async (o: Options) => {
 
     const html = (await htmlFile.buffer()).toString();
     const root = parse(html);
+
+    const head = root.getElementsByTagName("head")[0];
+    metas.push(...head.children.filter(c => c.rawTagName != "title").map(c => c.toString()));
+    
     const body = root.getElementsByTagName("body")[0];
-    nodes.push(...body.children);
+    pages.push(...body.children.map(c => c.toString()));
   }
 
   // write html
   console.log(`Writing merged HTML...`);
   const htmlFilePath = path.join(outputPath, "xhtml", "index.html");
   await createPathForFilePath(htmlFilePath);
-  await fs.promises.writeFile(htmlFilePath, nodes.join("\n"));
+  await fs.promises.writeFile(htmlFilePath, [
+    "<html>",
+    "<head>",
+    [...new Set(metas)].join("\n"), // unique only
+    "</head>",
+    "<body>",
+    pages.join("\n"),
+    "</body>",
+    "</html>"
+  ].join("\n"));
 
   console.log(chalk.green(`Converted ${o.epub} to JSON.`));
 };
@@ -231,7 +245,6 @@ export { epub2json };
 
 /**
  * TODO
- * - [ ] CSS support?
  * - [ ] page breaks
  * - [ ] hyperlink updates
  */
